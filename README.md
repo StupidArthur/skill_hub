@@ -6,9 +6,10 @@
 
 ```
 skill_hub/
-├── dev-skill/      # 开发工程纪律与流程规范
-├── ppt-skill/      # 网页 PPT 生成技能
-├── README.markdown # 本文件
+├── dev-skill/        # 开发工程纪律与流程规范
+├── ppt-skill/        # 网页 PPT 生成技能
+├── skill-standard/   # Skill 编写规范
+├── README.md         # 本文件
 └── .gitignore
 ```
 
@@ -18,6 +19,7 @@ skill_hub/
 |-------|------|
 | [dev-skill](./dev-skill/SKILL.md) | 开发工程纪律，以完整流程驱动。按需求→设计（含选型）→实现→测试→提交打包五阶段推进，每阶段内嵌对应规则。设计阶段含技术选型（桌面 GUI / B-S 网站 / CLI 工具，Go / Python）。 |
 | [ppt-skill](./ppt-skill/SKILL.md) | 生成横向翻页网页 PPT（单 HTML 文件），含 WebGL 背景、章节幕封、数据大字报、图片网格等模板。提供两种风格：① "电子杂志 × 电子墨水"（衬线 + 流体背景 + 暖色） ② "瑞士国际主义"（无衬线 + 网格点阵 + IKB / 柠檬黄 / 柠檬绿 / 安全橙高亮）。当需要制作分享 / 演讲 / 发布会风格的网页 PPT，或提到 "杂志风 PPT"、"瑞士风 PPT"、"Swiss Style"、"horizontal swipe deck" 时使用。 |
+| [skill-standard](./skill-standard/SKILL.md) | 指导如何编写 skill。按四步流程推进：选形态→写 frontmatter→写入口→写子文件。当需要新建、重构或审查 skill 格式时调用。 |
 
 ## 各 Skill 详细说明
 
@@ -69,6 +71,17 @@ skill_hub/
   - [references/image-prompts.md](./ppt-skill/references/image-prompts.md) —— 配图提示词
 - **使用时机**：需要做分享 / 演讲 / 发布会风格网页 PPT，或提到"杂志风 PPT"、"瑞士风 PPT"、"Swiss Style"、"horizontal swipe deck" 时调用。
 
+### 3. skill-standard — Skill 编写规范
+
+- **定位**：指导如何编写 skill 的元规范（meta-skill），是所有 skill 的格式基准。
+- **通用红线**：入口必须流程型、单文档也要放在目录下、子目录入口用 README.md、frontmatter 必备、description 含兜底句。
+- **四步流程**：
+  1. **选形态** —— 单文档 vs 目录级（[single-doc.md](./skill-standard/single-doc.md) / [directory.md](./skill-standard/directory.md)）
+  2. **写 frontmatter** —— name + description（[frontmatter.md](./skill-standard/frontmatter.md)）
+  3. **写入口 SKILL.md** —— 流程型，含红线 + 流程主线 + 横切表
+  4. **写子文件** —— 流程阶段文件 / 横切规则文件 / 子目录（目录级才有）
+- **案例参考**：[examples/](./skill-standard/examples/README.md)
+
 ## License
 
 本仓库为多 Skill 集合，各 Skill 独立持证，**协议不同**：
@@ -77,6 +90,7 @@ skill_hub/
 |-------|------|------------|
 | [`dev-skill/`](./dev-skill/) | [MIT](./dev-skill/LICENSE) | Copyright (c) 2026 StupidArthur。基于完全自写内容。 |
 | [`ppt-skill/`](./ppt-skill/) | [AGPL-3.0](./ppt-skill/LICENSE) | 衍生自歸藏的 [guizang-ppt-skill](https://github.com/op7418/guizang-ppt-skill)，原版权归属原作者。衍生修改与归属声明见 [NOTICE](./ppt-skill/NOTICE)。 |
+| [`skill-standard/`](./skill-standard/) | [MIT](./skill-standard/LICENSE) | Copyright (c) 2026 StupidArthur。基于完全自写内容。 |
 
 > ⚠️ `ppt-skill/` 为 AGPL-3.0 copyleft 协议。若以网络服务形式对外提供基于它的能力，须按 AGPL-3.0 §13 向用户公开修改后的完整源码。
 
@@ -94,3 +108,4 @@ npx skills add <repo-url> --skill <skill-name>
 
 - **dev-skill**：在 `dev-skill/` 下按现有规范新增子模块规范（设计阶段的选型树）。
 - **ppt-skill**：风格、模板、组件、清单的修改参考 `ppt-skill/mod/` 下的历史修改记录与评审稿（`personal_mod.md`、`review_by_*.md`、`review_merged.md`）。
+- **skill-standard**：规范本身的修改直接在 `skill-standard/` 下进行，新增案例放 `examples/`。
