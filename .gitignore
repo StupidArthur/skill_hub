@@ -1,0 +1,126 @@
+# =========================================
+# Skill Hub .gitignore
+# =========================================
+
+# ---------- Agent / Claude 本地配置 ----------
+# Claude Code 工具自身的本地配置目录(包含 settings.local.json、
+# todos/、projects/、session 缓存等),与 skill 本身无关。
+.claud/
+.claude/
+
+# 其它常见 Agent 本地目录(防止日后引入新工具)
+.aider*
+.cursor*
+.continue/
+.windsurf/
+.codeium/
+
+# ---------- 操作系统临时文件 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+ehthumbs_vista.db
+$RECYCLE.BIN/
+
+# Windows: 缩略图/视图/搜索索引
+System Volume Information/
+
+# =========================================
+# 通用编辑器 / IDE 残留
+# =========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+*.sublime-project
+*.sublime-workspace
+
+# =========================================
+# 通用临时 / 构建产物
+# =========================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# 备份目录
+backups/
+backup/
+*.old
+
+# =========================================
+# Node / 前端(为后续可能在 Skill 内附带脚本保留)
+# =========================================
+node_modules/
+.pnp/
+.pnp.js
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# 构建产物
+dist/
+build/
+out/
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+.turbo/
+coverage/
+
+# 环境/密钥
+.env
+.env.local
+.env.*.local
+
+# =========================================
+# Python
+# =========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# =========================================
+# Go
+# =========================================
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+vendor/
+
+# =========================================
+# 大型 / 二进制资源
+# =========================================
+*.zip
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.iso
+*.dmg
+
+# =========================================
+# Skill 内部已自带 .gitignore 的目录
+# (本仓库保留各自的 .gitignore 即可,这里不重复声明)
+# =========================================

@@ -1,0 +1,29 @@
+# 测试纪律
+
+> 流程阶段④。承接实现阶段，对不依赖框架 runtime 的纯业务逻辑（数据处理、规则计算、文件操作等）执行测试。依赖框架的薄层（HTTP handler、Wails 绑定、CLI 参数解析）不强制。本规范语言与框架无关，具体测试工具由选型 skill 决定。测试记录的文档写法见 [文档与知识管理](doc-management.md)。
+
+## 核心原则
+
+- **核心业务逻辑必须有单元测试**。不依赖框架 runtime 的纯业务逻辑（如数据处理、规则计算、文件操作）必须可独立测试且有测试覆盖。
+- 依赖框架 runtime 的薄层（如 HTTP handler、Wails 绑定方法、CLI 参数解析）不强制测试。
+- 测试与业务逻辑分离：业务逻辑不 import 框架，保证可独立 `go test` / `pytest`，无需启动框架环境。
+
+## 必须覆盖的场景
+
+每个核心功能至少覆盖以下四类场景：
+
+1. **正常路径**（happy path）— 典型输入得到预期输出
+2. **空输入/不存在** — 空集合、不存在的路径/ID 等边界
+3. **错误输入/非法数据** — 非法格式、类型不符等
+4. **边界情况** — 重复、冲突、覆盖、并发等
+
+## 测试隔离
+
+- 测试不得污染真实环境。用临时目录（Go 的 `t.TempDir()`、Python 的 `tmp_path`）隔离文件系统操作。
+- 测试之间相互独立，不依赖执行顺序。
+
+## 测试工具（按技术栈）
+
+具体测试框架和运行命令由选型 skill 提供：
+- Go：`go test -v -count=1 ./...`，见 [dev-route-selection](../dev-route-selection/gui-tool/wails-backend.md#测试规范)
+- Python：`pytest -v`，见 [dev-route-selection](../dev-route-selection/cli-tool/python.md#测试)
