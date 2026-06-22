@@ -9,6 +9,8 @@ skill_hub/
 ├── dev-skill/        # 开发工程纪律与流程规范
 ├── ppt-skill/        # 网页 PPT 生成技能
 ├── skill-standard/   # Skill 编写规范
+├── web-api-case-generator/     # 逆向生成接口自动化测试资产
+├── web-ui-case-executor/   # Web UI 自动化测试技能
 ├── README.md         # 本文件
 └── .gitignore
 ```
@@ -17,13 +19,26 @@ skill_hub/
 
 | Skill | 简介 |
 |-------|------|
+| [web-api-case-generator](./web-api-case-generator/SKILL.md) | 基于后端源码逆向生成接口自动化测试资产（API 文档、协议驱动、业务封装、演示脚本、冒烟测试）。接口覆盖率 100%，测试数据无痕清理。 |
 | [dev-skill](./dev-skill/SKILL.md) | 开发工程纪律，以完整流程驱动。按需求→设计（含选型）→实现→测试→提交打包五阶段推进，每阶段内嵌对应规则。设计阶段含技术选型（桌面 GUI / B-S 网站 / CLI 工具，Go / Python）。 |
 | [ppt-skill](./ppt-skill/SKILL.md) | 生成横向翻页网页 PPT（单 HTML 文件），含 WebGL 背景、章节幕封、数据大字报、图片网格等模板。提供两种风格：① "电子杂志 × 电子墨水"（衬线 + 流体背景 + 暖色） ② "瑞士国际主义"（无衬线 + 网格点阵 + IKB / 柠檬黄 / 柠檬绿 / 安全橙高亮）。当需要制作分享 / 演讲 / 发布会风格的网页 PPT，或提到 "杂志风 PPT"、"瑞士风 PPT"、"Swiss Style"、"horizontal swipe deck" 时使用。 |
 | [skill-standard](./skill-standard/SKILL.md) | 指导如何编写 skill。按四步流程推进：选形态→写 frontmatter→写入口→写子文件。当需要新建、重构或审查 skill 格式时调用。 |
+| [web-ui-case-executor](./web-ui-case-executor/SKILL.md) | 基于 Chrome DevTools MCP 执行中文 Web UI 自动化测试用例。将中文测试步骤解析为结构化操作并逐行执行，生成测试记录与优化报告。 |
 
 ## 各 Skill 详细说明
 
-### 1. dev-skill — 开发工程纪律
+### 1. web-api-case-generator — 逆向生成接口自动化测试资产
+
+- **定位**：基于后端源码逆向工程，一次性生成完整的接口自动化测试资产。
+- **核心红线**：禁止反问（自行推导）、禁止修改业务代码、禁止遗漏接口（100% 覆盖）、禁止掩盖真实 Bug。
+- **三阶段流程**：
+  1. **架构分析与接口盘点** —— 深度扫描源码，逆向推导全量接口清单与 DTO，输出给用户确认。
+  2. **测试资产生成** —— 按严格目录结构生成 6 类文件（api_docs / project_context / _api.py / _app.py / demo / smoke）。
+  3. **执行验证与自愈调试** —— 运行演示脚本和冒烟测试，自愈最多 3 次，真实 Bug 保留 FAIL 上报。
+- **技术栈**：Python 3.11 + httpx + websockets + pytest + pytest-asyncio。
+- **使用时机**：用户提供后端项目并要求生成接口测试、编写自动化测试框架、或需要从源码逆向工程测试资产时调用。
+
+### 2. dev-skill — 开发工程纪律
 
 - **定位**：语言与框架无关的通用开发流程纪律。
 - **核心红线**：
@@ -47,7 +62,7 @@ skill_hub/
   - CLI 工具：Go (cobra) / Python (typer)（[cli-tool/](./dev-skill/design/cli-tool/)）
   - 共享前端规范：React 18 + TS + Shadcn UI + Tailwind v3 + Vite（[shared/](./dev-skill/design/shared/)）
 
-### 2. ppt-skill — 网页 PPT 生成
+### 3. ppt-skill — 网页 PPT 生成
 
 - **定位**：单文件 HTML 横向翻页 PPT 技能；附带 PPT 配图与多平台封面。
 - **来源**：归藏（guizang-ppt-skill），仓库 [op7418/guizang-ppt-skill](https://github.com/op7418/guizang-ppt-skill)；当前项目支持方包括 360 安全龙虾（金牌赞助）、真格 Token Grant（Grant Supporter）。
@@ -71,7 +86,7 @@ skill_hub/
   - [references/image-prompts.md](./ppt-skill/references/image-prompts.md) —— 配图提示词
 - **使用时机**：需要做分享 / 演讲 / 发布会风格网页 PPT，或提到"杂志风 PPT"、"瑞士风 PPT"、"Swiss Style"、"horizontal swipe deck" 时调用。
 
-### 3. skill-standard — Skill 编写规范
+### 4. skill-standard — Skill 编写规范
 
 - **定位**：指导如何编写 skill 的元规范（meta-skill），是所有 skill 的格式基准。
 - **通用红线**：入口必须流程型、单文档也要放在目录下、子目录入口用 README.md、frontmatter 必备、description 含兜底句。
@@ -82,15 +97,29 @@ skill_hub/
   4. **写子文件** —— 流程阶段文件 / 横切规则文件 / 子目录（目录级才有）
 - **案例参考**：[examples/](./skill-standard/examples/README.md)
 
+### 5. web-ui-case-executor — Web UI 自动化测试
+
+- **定位**：基于 Chrome DevTools MCP 的 Web UI 端到端自动化测试技能。
+- **核心红线**：禁止跳步、禁止提前终止、禁止依赖视觉定位、禁止提前输出报告、异常必须熔断。
+- **五阶段流程**：
+  1. **用例解析** —— 将中文测试用例逐行拆解为结构化步骤。
+  2. **逐步执行** —— 按 DOM 优先级定位元素并执行操作，每步校验状态。
+  3. **状态验证与等待** —— 普通等待（30s）/ 主动等待（300s）/ 循环检测 / 异常重试与熔断。
+  4. **用例优化分析** —— 汇总优化信号，≥3 条时生成优化后的完整用例。
+  5. **输出测试报告** —— 生成 JSON 报告并保存到文件。
+- **使用时机**：输入中文测试用例、执行自动化 Web UI 测试、运行自动化测试流程时调用。
+
 ## License
 
 本仓库为多 Skill 集合，各 Skill 独立持证，**协议不同**：
 
 | Skill | 协议 | 版权 / 备注 |
 |-------|------|------------|
+| [`web-api-case-generator/`](./web-api-case-generator/) | [MIT](./web-api-case-generator/LICENSE) | Copyright (c) 2026 StupidArthur。基于完全自写内容。 |
 | [`dev-skill/`](./dev-skill/) | [MIT](./dev-skill/LICENSE) | Copyright (c) 2026 StupidArthur。基于完全自写内容。 |
 | [`ppt-skill/`](./ppt-skill/) | [AGPL-3.0](./ppt-skill/LICENSE) | 衍生自歸藏的 [guizang-ppt-skill](https://github.com/op7418/guizang-ppt-skill)，原版权归属原作者。衍生修改与归属声明见 [NOTICE](./ppt-skill/NOTICE)。 |
 | [`skill-standard/`](./skill-standard/) | [MIT](./skill-standard/LICENSE) | Copyright (c) 2026 StupidArthur。基于完全自写内容。 |
+| [`web-ui-case-executor/`](./web-ui-case-executor/) | [MIT](./web-ui-case-executor/LICENSE) | Copyright (c) 2026 StupidArthur。基于完全自写内容。 |
 
 > ⚠️ `ppt-skill/` 为 AGPL-3.0 copyleft 协议。若以网络服务形式对外提供基于它的能力，须按 AGPL-3.0 §13 向用户公开修改后的完整源码。
 
