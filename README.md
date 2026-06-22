@@ -23,6 +23,7 @@ skill_hub/
 | [dev-skill](./dev-skill/SKILL.md) | 开发工程纪律，以完整流程驱动。按需求→设计（含选型）→实现→测试→提交打包五阶段推进，每阶段内嵌对应规则。设计阶段含技术选型（桌面 GUI / B-S 网站 / CLI 工具，Go / Python）。 |
 | [ppt-skill](./ppt-skill/SKILL.md) | 生成横向翻页网页 PPT（单 HTML 文件），含 WebGL 背景、章节幕封、数据大字报、图片网格等模板。提供两种风格：① "电子杂志 × 电子墨水"（衬线 + 流体背景 + 暖色） ② "瑞士国际主义"（无衬线 + 网格点阵 + IKB / 柠檬黄 / 柠檬绿 / 安全橙高亮）。当需要制作分享 / 演讲 / 发布会风格的网页 PPT，或提到 "杂志风 PPT"、"瑞士风 PPT"、"Swiss Style"、"horizontal swipe deck" 时使用。 |
 | [skill-standard](./skill-standard/SKILL.md) | 指导如何编写 skill。按四步流程推进：选形态→写 frontmatter→写入口→写子文件。当需要新建、重构或审查 skill 格式时调用。 |
+| [case-design](./case-design/SKILL.md) | 需求到测试设计流水线，把需求转化为标准测试用例。按 P1 需求评审→P2 需求解构→P3 需求对象化→P4 测试点提取→P5 测试设计映射→P6 测试场景构建→P7 测试用例生成七阶段推进。当需要从需求生成测试用例、做测试设计、审查需求可测性时调用。 |
 | [web-ui-case-executor](./web-ui-case-executor/SKILL.md) | 基于 Chrome DevTools MCP 执行中文 Web UI 自动化测试用例。将中文测试步骤解析为结构化操作并逐行执行，生成测试记录与优化报告。 |
 
 ## 各 Skill 详细说明
@@ -138,3 +139,4 @@ npx skills add <repo-url> --skill <skill-name>
 - **dev-skill**：在 `dev-skill/` 下按现有规范新增子模块规范（设计阶段的选型树）。
 - **ppt-skill**：风格、模板、组件、清单的修改参考 `ppt-skill/mod/` 下的历史修改记录与评审稿（`personal_mod.md`、`review_by_*.md`、`review_merged.md`）。
 - **skill-standard**：规范本身的修改直接在 `skill-standard/` 下进行，新增案例放 `examples/`。
+- **case-design**：七阶段流水线的各层规则在 `case-design/` 下按阶段文件维护，新增测试设计方法或场景类型时更新对应阶段文件。
