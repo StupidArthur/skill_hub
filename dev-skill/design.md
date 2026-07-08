@@ -10,15 +10,29 @@
 
 按 [选型决策树](design/README.md) 判断开发类型（桌面 GUI 工具 / B/S 网站 / CLI 工具），必要时与用户沟通 Go/Python 选型。选型结论作为后续设计的输入。
 
-- 桌面 GUI 工具 → 固定 Wails + Go，见 [design/gui-tool/](design/gui-tool/stack.md)
+- 桌面 GUI 工具 → Wails + Go 作为桌面壳与控制层；Python 生态明显更优时，可增加独立 Python Worker，见 [design/gui-tool/](design/gui-tool/stack.md)
 - CLI 工具 → Go 或 Python，见 [design/cli-tool/](design/cli-tool/stack.md)
 - B/S 网站 → 前端复用共享层，后端 Go 或 Python，见 [design/bs-web/](design/bs-web/stack.md)
 - 带界面的场景共用前端规范，见 [design/shared/](design/shared/frontend-stack.md)
+
+### GUI 是否引入 Python Worker
+
+桌面 GUI 的前端和应用控制层不做 Go/Python 二选一：固定使用 Wails + Go。仅对业务执行能力判断是否增加 Python 组件。
+
+满足以下任一情况时，评估 Python Worker：
+
+- 核心库仅有 Python 实现，或 Python 实现成熟度明显更高
+- 涉及 AI、科学计算、数据分析、图像处理或专有 Python SDK
+- 需要长期驻留的协议服务、模型或计算引擎
+- 需要隔离高内存、易崩溃或依赖复杂的能力
+
+如果 Go 已有成熟方案，则优先保持纯 Go，避免无必要的多进程复杂度。
 
 ### 已有项目修改
 
 - 修改不涉及技术栈 → 直接进入方案设计
 - 修改涉及技术栈变更 → 向用户确认是否重新走选型评估，确认后再设计
+- 已有 Wails 项目增加 Python 能力 → 优先采用 Go 管理独立 Python Worker，不重写现有前端和桌面壳
 
 ## 第二步：方案设计
 
@@ -29,6 +43,7 @@
 - **设计未经确认不得开始编码。**
 - 必须输出模块拆分方案、修改逻辑、技术路线选择。
 - 存在多种技术路线时，必须列出优缺点并给出推荐方案。
+- GUI 引入 Python 时，必须明确控制面、数据面、进程生命周期、IPC 协议和打包方式。
 - 只有用户明确回复"同意"或类似确认后，才能进入实现阶段。
 
 ### 方案输出模板
@@ -40,7 +55,12 @@
 2. 模块拆分：涉及哪些模块/文件，各自职责
 3. 修改逻辑：准备改什么、怎么改（伪代码或步骤）
 4. 技术路线（如有分歧）：列出可选方案 + 优缺点 + 推荐
-5. 横切规则检查：
+5. GUI Python 组件（如涉及）：
+   - 为什么 Go 不能或不应直接实现
+   - Python 组件形态（一次性任务 / 常驻 Worker / 本地服务）
+   - Go 与 Python 的职责边界
+   - IPC、健康检查、超时、取消、退出和打包
+6. 横切规则检查：
    - 若涉及会丢数据的程序（批处理、长任务），须遵循 [运行安全与运维](runtime-safety.md)
    - 若涉及 LLM 调用的功能，须遵循 [LLM 集成功能设计](llm-integration.md)
 ```
@@ -51,7 +71,10 @@
 
 - 模块职责是否单一，有无跨模块调用内部私有函数的风险
 - 接口定义是否清晰，对外接口是否与 API 文档对应
-- 是否存在"同功能多版本冗余"的兼容性代码，能否合并
+- 是否存在同功能多版本冗余的兼容性代码
+- Python 是否确有生态优势，而不是开发习惯驱动
+- 前端是否只通过 Go 调用业务能力
+- Go 是否能够管理 Worker 的异常、退出和版本兼容
 
 ## 完成标志
 
