@@ -1,116 +1,106 @@
 # GUI 工具质量标准
 
-本章节定义 GUI 工具开发的硬性质量门槛，所有 GUI 工具必须达标才能交付。
+本章节定义 GUI 工具开发的硬性质量门槛。质量判断以可运行、可验证、可维护、可离线分发和进程可控为核心，不设置统一安装包体积上限。
 
-## 体积红线
+## 依赖与产物原则
 
-| 指标 | 红线 | 说明 |
-|------|------|------|
-| 最终 exe | **≤ 15 MB** | `wails build` 产出的单文件 |
-| 前端打包后 | ≤ 2 MB | `frontend/dist` 总大小 |
-
-### 体积检查命令
-
-```powershell
-# 检查 exe 体积
-$f = "build\bin\<工具名>.exe"
-$mb = [math]::Round((Get-Item $f).Length/1MB, 2)
-Write-Output "exe: $mb MB"
-```
-
-### 超标处理
-
-如果 exe 超过 15MB：
-1. 检查是否误引入了重型依赖
-2. 用 `wails build -upx` 压缩（需装 upx）
-3. 检查前端是否引入了未 tree-shake 的大库
+- 不为了追求固定体积数字而放弃正确、成熟的业务依赖
+- 必须清理未使用依赖、重复运行时和无效资源
+- 必须列清最终产物组成：主程序、Worker、资源、模型、证书等
+- 发布版本不得依赖用户预装开发环境
+- Python Worker 架构必须明确 Worker 生命周期和资源归属
+- 跨平台产物必须分别构建和验证
 
 ## 测试要求
 
-测试纪律（必须有测试、覆盖场景、测试隔离）遵循 [测试纪律](../../testing.md)。本章节只补充 GUI 工具的测试分层和运行命令。
+测试纪律遵循 [测试纪律](../../testing.md)。GUI 工具额外要求：
 
 | 层 | 要求 |
 |----|------|
-| 后端核心逻辑 | 必须有单元测试（见 ../../testing.md） |
-| app.go 方法 | 不强制（依赖 Wails runtime） |
-| 前端组件 | 不强制（轻量工具规模） |
-
-### 测试运行
-
-```bash
-# 运行所有测试，显示详情
-go test -v -count=1 ./...
-
-# 只看结果
-go test ./...
-```
+| Go 核心业务逻辑 | 单元测试 |
+| Wails 适配层 | 关键流程集成验证 |
+| 前端组件 | 复杂交互和关键状态验证 |
+| Python Worker | pytest 等业务测试 |
+| Go ↔ Python 协议 | 正常、错误、超时、取消、异常退出 |
+| 服务生命周期 | 启动、健康检查、停止、清理 |
 
 ## 构建标准
 
-### 开发模式
-
-```bash
-wails dev
-```
-- 热刷新，改前端自动刷新，改 Go 自动重编译
-- 首次编译较慢，后续增量快
-
-### 生产构建
+### 纯 Wails + Go
 
 ```bash
 wails build
 ```
-- 一条命令完成：生成绑定 → 前端构建 → Go 编译 → 打包
-- 产物在 `build/bin/<工具名>.exe`
 
-### 清理重建
+### Wails + Python Worker
 
-```bash
-wails build -clean
-```
-- 清空 build 目录后重新构建，解决缓存导致的奇怪问题
+必须完成：
+
+1. 锁定 Python 依赖
+2. 构建目标平台 Worker
+3. 打包资源、模型、证书和配置
+4. 验证 Go 可以启动 Worker
+5. 验证无开发环境机器可以运行
+
+开发环境允许调用 Python 源码，生产环境不得依赖用户系统 Python。
+
+## Python Worker 额外质量门槛
+
+- stdout 只能输出协议消息
+- stderr 用于日志
+- Worker 必须有版本握手
+- 请求必须有 ID、超时和错误码
+- Worker 异常退出后 GUI 必须收到明确状态
+- 应用退出后不得残留子进程
+- 自动重启必须有限制并区分配置错误
+- Python Worker 与 Go 主程序协议必须向后兼容或明确升级
 
 ## 交付前检查清单
 
-交付一个 GUI 工具前，逐项确认：
+### 通用
 
-- [ ] `wails build` 成功，无报错
-- [ ] exe 体积 ≤ 15MB
-- [ ] `go test ./...` 全部通过
-- [ ] 应用能正常启动，窗口显示正常
-- [ ] 核心功能手动验证可用
-- [ ] 空状态有友好提示
-- [ ] 错误情况有 Toast 反馈
-- [ ] 配色遵循设计 Token（暖灰底 + 单色强调）
-- [ ] 无外部字体/图片依赖
-- [ ] 跨平台代码有 GOOS 分支处理
+- [ ] Wails 生产构建成功
+- [ ] 核心业务测试通过
+- [ ] 应用启动正常
+- [ ] 错误状态可诊断
+- [ ] 资源路径在发布环境有效
+- [ ] 无无效依赖和无效资源
 
-## 常见问题处理
+### 包含 Python Worker
 
-### WebView2 冲突（开发时）
+- [ ] Worker 已随应用交付
+- [ ] 无需用户安装 Python
+- [ ] Go 能完成 ping 和版本握手
+- [ ] 正常启动和关闭
+- [ ] 崩溃时前端获得明确错误
+- [ ] 无残留 Python 进程
+- [ ] 日志和协议分离
 
-现象：`wails dev` 报 `8000ffff: Catastrophic failure`
-原因：多个实例抢同一 WebView2 user data 目录
-解决：关掉所有运行中的实例，再启动
+## 常见问题
 
-### 前端 TS 编译错误
+### Python Worker 启动失败
 
-现象：`wails build` 在 "Compiling frontend" 阶段失败
-解决：`cd frontend && npx tsc --noEmit` 看具体错误
+检查：
 
-### 绑定未更新
+- 可执行路径
+- 动态库
+- 资源文件
+- 依赖锁定版本
+- stderr 日志
 
-现象：前端调用后端方法报 undefined
-解决：`wails generate module` 重新生成绑定
+### 协议解析失败
 
-### Go 依赖下载慢
+检查 Python 是否将普通日志输出到了 stdout。协议输出和日志输出必须分离。
 
-```powershell
-$env:GOPROXY='https://goproxy.cn,direct'
-```
+### 前端状态不同步
 
-### 前端依赖安装慢
+检查 Go 是否将 Worker 状态通过 Wails Event 转发，而不是让前端直接轮询 Worker。
 
-```powershell
-npm config set registry https://registry.npmmirror.com
-```
+## 验收标准
+
+- 前端不直接调用 Worker
+- Go 是生命周期唯一管理者
+- Worker 有健康检查和版本协议
+- 所有任务可取消或明确失败
+- 发布产物在目标环境可运行
+- 架构复杂度与业务收益匹配
