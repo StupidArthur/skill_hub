@@ -19,16 +19,21 @@ GUI 场景不是在 Go 和 Python 之间二选一：
 前端 React
     ↓ Wails Binding / Event
 Go 应用控制层
-    ├── 系统能力、配置、文件、日志、任务状态
-    └── Python Worker Manager（按需）
+    ├── 业务 Service
+    ├── 系统与持久化 Adapter
+    └── Python Worker Adapter（按需）
             ↓ IPC
        Python 业务执行层
 ```
 
 - Wails + Go 始终是应用主体和唯一前端入口
+- Go 代码按业务能力组织，禁止把业务文件全部平铺在根目录
+- Wails Binding 是薄边界，不承载数据库、Worker 和业务规则
 - Python 是可选业务组件，不直接管理窗口，不直接暴露给前端
-- 外部协议客户端应直接连接真实服务端，不应无意义地经过 Go 转发数据面
+- 外部协议客户端应直接连接真实服务端，不无意义地经过 Go 转发数据面
 - Go 负责 Python 的启动、停止、健康检查、超时、取消、日志、崩溃处理和退出清理
+
+Go 的目录分级、依赖方向和 Binding 拆分见 [Go 工程结构与依赖规则](go-architecture.md)。
 
 ## 何时引入 Python
 
@@ -64,7 +69,7 @@ Go 应用控制层
 - Web 前端适合实现现代、紧凑、Notion 风格界面
 - Wails 复用系统 WebView，不需要自带完整浏览器运行时
 - Go 适合进程生命周期、并发、文件系统、系统托盘和跨平台控制
-- Go-JS 绑定由 Wails 生成，前端只维护一个稳定 API 层
+- Go-JS 绑定由 Wails 生成，前端只维护稳定 API 层
 - Python 能力可以独立替换、升级或崩溃恢复，不污染 UI 结构
 
 ## 禁止使用的技术与做法
@@ -79,6 +84,8 @@ Go 应用控制层
 | 前端直接连接 Python | 绕过 Go 控制层，生命周期和安全边界失控 |
 | 发布时依赖系统 Python | 用户环境不可控，版本和依赖无法保证 |
 | 固定开放本地 HTTP 端口且无认证 | 容易端口冲突，也可能被其他本机进程调用 |
+| 根目录平铺全部 Go 业务文件 | 职责和依赖方向不清晰，难以扩展测试 |
+| 单个 App 暴露全部业务方法 | 形成上帝对象，前端绑定和维护成本持续上升 |
 
 ## 环境要求
 
@@ -98,6 +105,7 @@ Go 应用控制层
 
 ## 下一步
 
-- Go 分层与 Wails 绑定：[Wails 后端模式](wails-backend.md)
+- Go 目录、依赖与包边界：[Go 工程结构与依赖规则](go-architecture.md)
+- Wails 生命周期与绑定：[Wails 后端模式](wails-backend.md)
 - Python 组件与进程管理：[Python Worker 与本地服务](python-worker.md)
 - 构建、测试和交付：[GUI 质量标准](quality.md)
