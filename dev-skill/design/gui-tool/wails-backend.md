@@ -1,338 +1,492 @@
 # Wails 后端模式
 
-本章节定义 GUI 工具 Go 后端的标准分层、Wails 绑定、测试、错误处理，以及前端如何衔接 Wails 后端。
+本章节定义 Wails 边界层、生命周期、绑定、错误、事件和前端衔接。Go 目录与依赖规则见 [Go 工程结构与依赖规则](go-architecture.md)。
 
-## 标准文件结构
+## 一、职责定位
 
+Wails 后端不是业务代码的集中地，而是桌面边界适配器：
+
+```text
+前端
+  ↓ Wails Binding
+bindings
+  ↓
+业务 Service
+  ↓ ports
+数据库 / Python Worker / 文件系统等 adapters
 ```
-项目根/
-├── main.go              Wails 入口 + 窗口配置
-├── app.go               App struct + 暴露给前端的方法
-├── <domain>.go          核心业务逻辑（纯函数，可独立测试）
-├── <domain>_test.go     核心逻辑的单元测试
-└── frontend/            前端（见 shared/前端架构模式）
+
+Wails 相关代码只应出现在：
+
+- `main.go`
+- `internal/app`
+- `internal/bindings`
+- 少量需要 Wails runtime 的 platform adapter
+
+业务包不得 import Wails。
+
+## 二、推荐入口结构
+
+```text
+project/
+├── main.go
+├── internal/
+│   ├── app/
+│   │   ├── container.go
+│   │   └── lifecycle.go
+│   ├── bindings/
+│   │   ├── project.go
+│   │   ├── uaserver.go
+│   │   └── settings.go
+│   └── ...
+└── frontend/
 ```
 
-### 分层原则
+项目规模判断、完整目录和迁移方式见 [Go 工程结构与依赖规则](go-architecture.md)。
 
-| 文件 | 职责 | 依赖 |
-|------|------|------|
-| `main.go` | 启动 Wails、配置窗口 | app.go |
-| `app.go` | 暴露给前端的方法，调用核心逻辑 | 核心逻辑 + Wails runtime |
-| `<domain>.go` | 纯业务逻辑，不依赖 Wails | 仅标准库 |
-| `<domain>_test.go` | 测试核心逻辑 | 仅标准库 + testing |
+## 三、main.go 只做启动
 
-**关键**：核心逻辑文件（如 `skillManager.go`）**不 import Wails**，保证可独立 `go test`。
-
-## main.go 标准模板
+`main.go` 是 composition entry，不写业务逻辑。
 
 ```go
 package main
 
 import (
-	"embed"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+    "embed"
+    "log"
+
+    "github.com/wailsapp/wails/v2"
+    "github.com/wailsapp/wails/v2/pkg/options"
+    "github.com/wailsapp/wails/v2/pkg/options/assetserver"
+
+    "yourapp/internal/app"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	app := NewApp()
-	err := wails.Run(&options.App{
-		Title:     "工具名称",
-		Width:     1180,
-		Height:    780,
-		MinWidth:  920,
-		MinHeight: 620,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
-		OnStartup:        app.startup,
-		Bind: []interface{}{app},
-	})
-	if err != nil {
-		println("Error:", err.Error())
-	}
+    container, err := app.NewContainer()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    err = wails.Run(&options.App{
+        Title:     "工具名称",
+        Width:     1180,
+        Height:    780,
+        MinWidth:  920,
+        MinHeight: 620,
+        AssetServer: &assetserver.Options{
+            Assets: assets,
+        },
+        OnStartup:  container.Lifecycle.Startup,
+        OnShutdown: container.Lifecycle.Shutdown,
+        Bind: []interface{}{
+            container.ProjectBinding,
+            container.UAServerBinding,
+            container.SettingsBinding,
+        },
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
 }
 ```
 
-**规范**：
-- 背景色白色 `RGBA{255,255,255,1}`（浅色主题）
-- 窗口最小尺寸 920×620
-- `Bind` 只绑定一个 app 实例
+要求：
 
-## app.go 标准模板
+- `main.go` 不创建数据库表、不启动 Worker、不读写业务文件
+- 所有依赖由 `app.NewContainer()` 创建
+- 生命周期统一由 `Lifecycle` 管理
+- Binding 按业务能力拆分，不强制只绑定一个 `App`
+
+## 四、Container 是唯一组合根
 
 ```go
-package main
+package app
 
 import (
-	"context"
-	"os/exec"
-	"path/filepath"
-	stdruntime "runtime"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+    "yourapp/internal/adapters/pyworker"
+    "yourapp/internal/adapters/sqlite"
+    "yourapp/internal/bindings"
+    "yourapp/internal/project"
+    "yourapp/internal/uaserver"
 )
 
-type App struct {
-	ctx context.Context
+type Container struct {
+    Lifecycle       *Lifecycle
+    ProjectBinding  *bindings.ProjectBinding
+    UAServerBinding *bindings.UAServerBinding
+    SettingsBinding *bindings.SettingsBinding
 }
 
-func NewApp() *App {
-	return &App{}
-}
+func NewContainer() (*Container, error) {
+    cfg, err := LoadConfig()
+    if err != nil {
+        return nil, err
+    }
 
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-}
+    db, err := sqlite.Open(cfg.DatabasePath)
+    if err != nil {
+        return nil, err
+    }
 
-// 以下为暴露给前端的方法，命名用 PascalCase（Wails 会生成同名 JS 方法）
+    workerClient := pyworker.NewClient(cfg.Worker)
 
-// GetXxx 获取数据
-func (a *App) GetXxx(id string) XxxResult {
-	return getXxx(id)  // 调用核心逻辑
-}
+    projectService := project.NewService(
+        sqlite.NewProjectRepository(db),
+    )
+    uaService := uaserver.NewService(
+        pyworker.NewUARuntime(workerClient),
+    )
 
-// PickFile 弹出文件选择框
-func (a *App) PickFile() string {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "选择文件",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "ZIP", Pattern: "*.zip"},
-		},
-	})
-	if err != nil {
-		return ""
-	}
-	return path
-}
-
-// SaveFile 弹出保存框
-func (a *App) SaveFile(defaultName string) string {
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "保存",
-		DefaultFilename: defaultName,
-		Filters: []runtime.FileFilter{
-			{DisplayName: "ZIP", Pattern: "*.zip"},
-		},
-	})
-	if err != nil || path == "" {
-		return ""
-	}
-	return path
-}
-
-// OpenInFolder 打开系统资源管理器（跨平台）
-func (a *App) OpenInFolder(dir string) {
-	switch stdruntime.GOOS {
-	case "windows":
-		exec.Command("explorer", dir).Start()
-	case "darwin":
-		exec.Command("open", dir).Start()
-	default:
-		exec.Command("xdg-open", dir).Start()
-	}
+    return &Container{
+        Lifecycle:       NewLifecycle(db, workerClient),
+        ProjectBinding:  bindings.NewProjectBinding(projectService),
+        UAServerBinding: bindings.NewUAServerBinding(uaService),
+        SettingsBinding: bindings.NewSettingsBinding(cfg),
+    }, nil
 }
 ```
 
-### 方法命名规范
+禁止：
 
-| 模式 | 含义 | 返回 |
-|------|------|------|
-| `GetXxx` | 获取数据 | 结构体 |
-| `ListXxx` | 列出集合 | 数组 |
-| `PickXxx` | 弹框选择 | 字符串（路径） |
-| `InstallXxx` | 安装/创建 | 结果结构体 |
-| `UninstallXxx` | 卸载/删除 | bool |
-| `ExportXxx` | 导出 | 字符串（路径） |
-| `OpenInFolder` | 打开目录 | void |
+- Binding 内 `sqlite.Open()`
+- Binding 内 `exec.Command()` 启动 Python
+- 每次调用临时创建 Service
+- 使用全局可变单例保存所有依赖
 
-## 核心逻辑层规范
+## 五、生命周期
 
-### 数据结构定义
+生命周期至少管理：
 
-```go
-type Skill struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Dir         string            `json:"dir"`
-	Files       []FileInfo        `json:"files"`
-}
-
-type FileInfo struct {
-	Name string `json:"name"`
-	Type string `json:"type"`  // "file" | "dir"
-}
-```
-
-**规范**：
-- 所有结构体字段必须加 `json` tag
-- 返回给前端的数据用结构体，不用 map
-- 错误信息放在结果结构体的 `Error` 字段，不抛 panic
-
-### 错误处理模式
+- Wails context
+- 根 `context.Context` 和 cancel
+- 数据库关闭
+- Worker 启停
+- 后台 goroutine
+- 日志 flush
 
 ```go
-type InstallResult struct {
-	Success   bool     `json:"success"`
-	Installed []string `json:"installed"`
-	Error     string   `json:"error"`  // 错误信息放这里
-}
-
-func installFromZip(...) InstallResult {
-	if err != nil {
-		return InstallResult{Error: err.Error()}  // 返回错误，不 panic
-	}
-	return InstallResult{Success: true, ...}
-}
-```
-
-**规范**：
-- 核心逻辑遇到错误返回带 `Error` 字段的结果，不 panic
-- app.go 层不额外处理错误，直接透传给前端
-- 前端检查 `res.error` 字段决定显示成功还是失败
-
-## 测试规范
-
-测试纪律（必须有测试、覆盖场景、测试隔离）遵循 [dev-discipline](../../dev-discipline/testing.md)。本章节只补充 Wails 后端的测试文件命名、分层和模板。
-
-### 测试文件命名
-
-`<domain>_test.go`，与被测文件同包同目录。
-
-### 测试分层
-
-- 核心逻辑（不依赖 Wails 的纯函数）必须有测试（见 ../../testing.md）
-- app.go 里的方法（依赖 Wails runtime）不强制测试
-- 用 `t.TempDir()` 创建临时目录，测试完自动清理
-
-### 测试模板
-
-```go
-package main
+package app
 
 import (
-	"os"
-	"path/filepath"
-	"testing"
+    "context"
+    "time"
 )
 
-func TestXxx(t *testing.T) {
-	dir := t.TempDir()
-	skillsDir := filepath.Join(dir, "skills")  // 用不存在的子路径测"不存在"场景
+type Closable interface {
+    Close() error
+}
 
-	// 准备测试数据
-	// ...
+type Worker interface {
+    Start(context.Context) error
+    Stop(context.Context) error
+}
 
-	// 执行
-	res := doSomething(skillsDir)
+type Lifecycle struct {
+    cancel context.CancelFunc
+    db     Closable
+    worker Worker
+}
 
-	// 断言
-	if !res.Success {
-		t.Errorf("应成功，得到 %+v", res)
-	}
+func (l *Lifecycle) Startup(wailsCtx context.Context) {
+    rootCtx, cancel := context.WithCancel(wailsCtx)
+    l.cancel = cancel
+
+    go func() {
+        _ = l.worker.Start(rootCtx)
+    }()
+}
+
+func (l *Lifecycle) Shutdown(context.Context) {
+    if l.cancel != nil {
+        l.cancel()
+    }
+
+    stopCtx, cancel := context.WithTimeout(
+        context.Background(),
+        5*time.Second,
+    )
+    defer cancel()
+
+    _ = l.worker.Stop(stopCtx)
+    _ = l.db.Close()
 }
 ```
 
-### 运行测试
+实际项目应记录关闭错误；示例省略日志细节。
+
+## 六、Binding 按业务能力拆分
+
+```go
+package bindings
+
+import (
+    "context"
+
+    "yourapp/internal/uaserver"
+)
+
+type UAServerService interface {
+    Start(context.Context, uaserver.Config) (uaserver.Status, error)
+    Stop(context.Context) error
+    Status(context.Context) (uaserver.Status, error)
+}
+
+type UAServerBinding struct {
+    ctx     context.Context
+    service UAServerService
+}
+
+func NewUAServerBinding(service UAServerService) *UAServerBinding {
+    return &UAServerBinding{service: service}
+}
+
+func (b *UAServerBinding) SetContext(ctx context.Context) {
+    b.ctx = ctx
+}
+```
+
+Binding 方法只做边界转换：
+
+```go
+type StartServerRequest struct {
+    Endpoint  string `json:"endpoint"`
+    Namespace string `json:"namespace"`
+}
+
+type ServerStatusDTO struct {
+    State    string `json:"state"`
+    Endpoint string `json:"endpoint"`
+}
+
+func (b *UAServerBinding) Start(
+    req StartServerRequest,
+) (ServerStatusDTO, error) {
+    cfg, err := req.toConfig()
+    if err != nil {
+        return ServerStatusDTO{}, err
+    }
+
+    status, err := b.service.Start(b.ctx, cfg)
+    if err != nil {
+        return ServerStatusDTO{}, mapPublicError(err)
+    }
+
+    return toServerStatusDTO(status), nil
+}
+```
+
+## 七、Context 注入
+
+所有 Binding 需要共享应用根 context。推荐由 `Lifecycle.Startup` 注入：
+
+```go
+type ContextReceiver interface {
+    SetContext(context.Context)
+}
+
+func (l *Lifecycle) Startup(ctx context.Context) {
+    rootCtx, cancel := context.WithCancel(ctx)
+    l.cancel = cancel
+
+    for _, receiver := range l.contextReceivers {
+        receiver.SetContext(rootCtx)
+    }
+}
+```
+
+禁止在业务调用中随意使用 `context.Background()` 绕过应用取消。短任务应基于根 context 创建超时 context。
+
+## 八、方法命名
+
+Binding 类型已经表达业务域，方法不重复领域名。
+
+推荐：
+
+```text
+ProjectBinding.List
+ProjectBinding.Save
+ProjectBinding.Delete
+UAServerBinding.Start
+UAServerBinding.Stop
+UAServerBinding.Status
+ScenarioBinding.Run
+ScenarioBinding.Cancel
+```
+
+不推荐：
+
+```text
+App.GetAllProjects
+App.StartUAServerProcess
+App.DoScenarioExecution
+```
+
+方法使用 PascalCase，保证 Wails 生成前端绑定。
+
+## 九、DTO 边界
+
+- 前端请求和返回结构定义在 `bindings`
+- 所有公开字段带 `json` tag
+- 内部模型不直接暴露给前端
+- 路径、时间、枚举等在边界统一格式化
+- 不用 `map[string]any` 代替稳定 DTO
+
+DTO 转换函数保持私有：
+
+```go
+func toServerStatusDTO(status uaserver.Status) ServerStatusDTO
+func (r StartServerRequest) toConfig() (uaserver.Config, error)
+```
+
+## 十、错误处理
+
+优先使用 `(T, error)`，让前端 Promise 正常 reject。
+
+业务层返回可判定错误：
+
+```go
+var ErrAlreadyRunning = errors.New("server already running")
+```
+
+Binding 将内部错误映射为稳定用户错误：
+
+```go
+type PublicError struct {
+    Code    string `json:"code"`
+    Message string `json:"message"`
+}
+```
+
+不要：
+
+- panic 处理普通业务失败
+- 把完整堆栈返回前端
+- 所有方法都返回 `Success bool + Error string`
+- 根据错误文本做业务判断
+
+批量操作可返回部分成功明细，但系统级失败仍返回 `error`。
+
+## 十一、Wails Event
+
+事件适合：
+
+- Worker 状态
+- 长任务进度
+- 实时日志
+- 外部客户端连接状态
+- 数据变化通知
+
+事件名使用稳定命名空间：
+
+```text
+worker:state
+worker:log
+ua-server:state
+scenario:progress
+project:changed
+```
+
+Go 负责把内部事件转换为前端 DTO，再调用 `runtime.EventsEmit`。业务包不直接 import Wails runtime。
+
+不要用事件替代所有请求响应。一次性查询和命令仍使用 Binding 方法。
+
+## 十二、系统能力
+
+系统对话框、打开目录等能力放在 `platform` 或专用 Binding，不放入业务 Service。
+
+```go
+type SystemBinding struct {
+    ctx context.Context
+}
+
+func (b *SystemBinding) PickFile() (string, error) {
+    return runtime.OpenFileDialog(
+        b.ctx,
+        runtime.OpenDialogOptions{Title: "选择文件"},
+    )
+}
+```
+
+跨平台差异较大时使用：
+
+```text
+opener_windows.go
+opener_darwin.go
+opener_linux.go
+```
+
+## 十三、前端 API 收口
+
+组件不得直接 import `wailsjs`，统一封装：
+
+```ts
+// frontend/src/lib/api/project.ts
+import {
+  List,
+  Save,
+  Delete,
+} from '../../../wailsjs/go/bindings/ProjectBinding'
+
+export const projectApi = {
+  list: List,
+  save: Save,
+  remove: Delete,
+}
+```
+
+```ts
+// frontend/src/lib/api/uaServer.ts
+import {
+  Start,
+  Stop,
+  Status,
+} from '../../../wailsjs/go/bindings/UAServerBinding'
+
+export const uaServerApi = {
+  start: Start,
+  stop: Stop,
+  status: Status,
+}
+```
+
+页面只依赖业务 API 模块。
+
+## 十四、测试分层
+
+- `internal/<feature>`：业务单元测试
+- `internal/adapters`：数据库、协议和 Worker adapter 测试
+- `internal/bindings`：DTO 转换和关键错误映射测试
+- `tests/integration`：Wails 控制层以下的真实链路
+
+运行：
 
 ```bash
 go test -v -count=1 ./...
 ```
 
-## 跨平台处理
+Binding 应保持足够薄，避免必须启动完整 Wails 环境才能验证业务。
 
-涉及系统操作的代码，必须用 `runtime.GOOS` 分支处理三平台：
+## 十五、禁止模式
 
-```go
-switch stdruntime.GOOS {
-case "windows":
-    // Windows 实现
-case "darwin":
-    // macOS 实现
-default:
-    // Linux 实现
-}
-```
+- 项目根目录堆放所有 `.go` 业务文件
+- 单个 `App` 类型暴露全部业务方法
+- Binding 直接写 SQL、操作 Worker 或实现业务规则
+- 业务包 import Wails runtime
+- 前端直接 import 多个零散 `wailsjs` 方法
+- 全局变量保存 context、数据库或 Worker
+- 使用 `common`、`helpers`、`utils` 收纳不相关逻辑
 
-路径拼接用 `filepath.Join`（不用 `/` 或 `\` 拼接），获取用户目录用 `os.UserHomeDir()`。
+## 十六、验收标准
 
-## API 封装层（Wails 版）
-
-GUI 场景的 [前端 API 封装层](../shared/frontend-patterns.md#api-封装层必须) 实现为封装 Wails 生成的 Go 绑定。
-
-```ts
-// frontend/src/lib/api.ts
-import { GetAgents, ListSkills, GetSkillDetail, PickZip, InstallFromZip } from '../../wailsjs/go/main/App'
-import type { main } from '../../wailsjs/go/models'
-
-// 类型从 Wails 生成的 models 重导出，组件用业务类型名
-export type Agent = main.Agent
-export type Skill = main.Skill
-
-export const api = {
-  getAgents: GetAgents,
-  listSkills: ListSkills,
-  getSkillDetail: GetSkillDetail,
-  pickZip: PickZip,
-  installFromZip: InstallFromZip,
-}
-```
-
-**规范**：
-- 组件永远 `import { api } from '@/lib/api'`，不直接 import `wailsjs`
-- 后端方法签名变更时，只改这一个文件
-- 类型重导出用业务语义名（`Agent` 而非 `main.Agent`）
-
-## 顶层 App 骨架
-
-GUI 工具的 `App.tsx` 标准骨架，体现"状态上提 + ToastProvider 包裹 + 三态渲染"。
-
-```tsx
-import { useEffect, useState, useCallback } from 'react'
-import { ToastProvider, useToast } from '@/components/Toast'
-import { Sidebar } from '@/components/Sidebar'
-import { api, type Agent } from '@/lib/api'
-
-function AppContent() {
-  const toast = useToast()
-  const [agents, setAgents] = useState<Agent[]>([])
-  const [current, setCurrent] = useState<Agent | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => { api.getAgents().then(setAgents).catch(() => {}) }, [])
-
-  const load = useCallback(async () => {
-    if (!current) return
-    setLoading(true)
-    try {
-      // await api.xxx(current.id)
-    } catch (e) {
-      toast(String(e), 'error')
-    } finally {
-      setLoading(false)
-    }
-  }, [current, toast])
-
-  return (
-    <div className="flex h-screen">
-      <Sidebar agents={agents} current={current} onSelect={setCurrent} />
-      <main className="flex-1 flex flex-col">{/* 顶栏 + 内容区 */}</main>
-    </div>
-  )
-}
-
-export default function App() {
-  return (
-    <ToastProvider>
-      <AppContent />
-    </ToastProvider>
-  )
-}
-```
-
-**规范**：`ToastProvider` 必须在最外层，`useToast` 只能在 `AppContent` 内用（不能在 Provider 自身用）。
+- `main.go` 只负责启动
+- 具体依赖只在 `app.Container` 组装
+- Binding 按业务域拆分
+- Binding 只做 DTO、调用和事件转换
+- 业务包完全脱离 Wails 可测试
+- 前端 API 统一收口
+- 生命周期能关闭数据库、Worker 和后台任务
+- 项目目录符合 [Go 工程结构与依赖规则](go-architecture.md)
