@@ -7,192 +7,76 @@ description: 为新项目、架构迁移或关键技术路线变化直接选择�
 
 目标：**直接做选择，不做技术百科。**
 
-## 1. 先判断是否需要选型
+## 1. 是否需要重新选型
 
-- 已有项目普通修改：沿用现有技术栈。
-- 只有新项目、明确迁移、现有方案无法满足需求时，重新选型。
+| 场景 | 处理 |
+|---|---|
+| 已有项目普通修改 | 沿用现有技术栈 |
+| 新项目 | 重新选型 |
+| 明确架构迁移 | 重新选型 |
+| 现有方案无法满足需求 | 重新选型 |
 
-## 2. 按产品形态选择
+## 2. 默认技术路线
 
-### 桌面 GUI
+| 场景 | 默认选择 | 什么时候偏离 |
+|---|---|---|
+| 桌面 GUI | React + TypeScript + Vite → Wails → Go | AI / 数据 / 科学计算 / 专有 Python SDK / 模型驻留明显依赖 Python 时，加 Python Worker |
+| 普通 Web / 后台 / 管理系统 | React + TypeScript + Vite + Go API | 后端强依赖 Python 生态时改为 Python API |
+| SSR / SEO / 内容站 | Next.js | 只有需求明确不需要 SSR/SEO 时回到 Vite SPA |
+| 后端服务 / API | Go | AI / ML / 数据分析或关键 SDK 明显偏 Python 时用 Python |
+| 正式 CLI / 跨平台工具 | Go | 内部脚本、一次性任务、数据或 AI 自动化时用 Python |
+| 批处理 / 自动化 | Python | 单二进制分发、高并发、长期运行、部署一致性要求高时用 Go |
 
-默认：
+### 桌面 GUI 边界
 
-```text
-React + TypeScript + Vite
-        ↓
-     Wails
-        ↓
-       Go
-```
+默认链路：**React + TypeScript + Vite → Wails → Go**  
+需要 Python 时：**React + TypeScript + Vite → Wails → Go → Python Worker**
 
-需要 Python 生态时：
-
-```text
-React + TypeScript + Vite
-        ↓
-     Wails
-        ↓
-       Go
-        ↓
- Python Worker
-```
-
-选择规则：
-
-- 默认保持纯 Go。
-- AI、数据、科学计算、专有 Python SDK、模型驻留明显依赖 Python 时，再增加 Worker。
-- Go 管理 Worker 生命周期；前端不直接调用 Python。
-- 正式分发不能依赖用户预装开发用 Python 环境。
-
-### Web 应用
-
-普通后台、工具、管理系统：
-
-```text
-React + TypeScript + Vite
-        +
-      Go API
-```
-
-需要 SSR / SEO / 内容站：
-
-```text
-Next.js
-```
-
-后端明显依赖 AI、数据处理或 Python SDK：
-
-```text
-React + TypeScript
-        +
-Python API
-```
-
-### 后端服务 / API
-
-默认：
-
-```text
-Go
-```
-
-改用 Python 的条件：
-
-- 核心能力依赖 AI / ML / 数据分析生态；
-- 关键 SDK 只有 Python 或 Python 成熟度明显更高；
-- Python 能显著减少跨语言胶水代码。
-
-否则保持 Go。
-
-### CLI
-
-正式工具、需要长期维护或跨平台分发：
-
-```text
-Go
-```
-
-内部脚本、一次性任务、数据处理、AI 自动化：
-
-```text
-Python
-```
-
-### 批处理 / 自动化
-
-默认：
-
-```text
-Python
-```
-
-如果需要单二进制分发、高并发、长期运行或更强部署一致性：
-
-```text
-Go
-```
+Python Worker 只守四条边界：Go 管生命周期；前端不直连 Python；IPC 使用结构化消息；正式分发不依赖用户预装开发用 Python 环境。
 
 ## 3. 数据与接口
 
-### 数据库
+### 数据
 
-```text
-本地单机数据      → SQLite
-服务端关系数据    → PostgreSQL
-```
-
-只有确有需求时再增加：
-
-```text
-Redis        → 共享缓存、短期状态、限流等
-对象存储     → 大文件、媒体、归档
-搜索引擎     → 全文检索成为核心能力时
-```
-
-不要因为“以后可能会用”提前引入。
+| 需求 | 选择 |
+|---|---|
+| 本地单机数据 | SQLite |
+| 服务端关系数据 | PostgreSQL |
+| 共享缓存 / 短期状态 / 限流 | Redis，仅有明确需求时 |
+| 大文件 / 媒体 / 归档 | 对象存储，仅有明确需求时 |
+| 全文检索成为核心能力 | 搜索引擎，仅有明确需求时 |
 
 ### API / IPC
 
-默认：
+| 需求 | 选择 |
+|---|---|
+| 默认接口 | HTTP + JSON |
+| 服务端单向实时推送 | SSE |
+| 双向实时通信 | WebSocket |
+| 高吞吐内部服务通信 | gRPC |
+| 本地进程简单通信 | stdin/stdout + 结构化消息 |
 
-```text
-HTTP + JSON
-```
-
-按需求偏离：
-
-```text
-服务端单向实时推送      → SSE
-双向实时通信            → WebSocket
-高吞吐内部服务通信      → gRPC
-本地进程简单通信        → stdin/stdout + 结构化消息
-```
-
-没有明确收益时不引入额外协议。
+没有明确收益时，不增加额外协议。
 
 ## 4. 前端基础栈
 
-新项目默认：
+| 场景 | 选择 |
+|---|---|
+| 默认前端 | React + TypeScript + Vite |
+| SSR / SEO | Next.js |
+| 组件库 / 样式 / 视觉规范 | 跟随项目现状；新项目交给 `ui-style` |
 
-```text
-React
-TypeScript
-Vite
-```
+## 5. 默认不要提前引入
 
-需要 SSR / SEO 时使用 Next.js。
+**微服务 · Kubernetes · 消息队列 · Redis · GraphQL · gRPC · 第二种后端语言 · Python Worker · 复杂前端状态管理 · 多层架构模板**
 
-组件库、样式方案和视觉规范由项目现状及 `ui-style` 决定，不在这里绑定。
+只有当前需求已经产生明确收益时才引入，不为未来假设提前设计。
 
-## 5. 默认不要引入的复杂度
+## 6. 输出
 
-没有明确需求时，不主动加入：
+只输出：**选择：** `<技术路线>`　**原因：** `<2~4 个关键原因>`　**偏离默认：** `<有则写，没有省略>`
 
-- 微服务；
-- Kubernetes；
-- 消息队列；
-- Redis；
-- GraphQL；
-- gRPC；
-- 第二种后端语言；
-- Python Worker；
-- 复杂前端状态管理；
-- 多层架构模板。
-
-需要时再加，不为未来假设提前设计。
-
-## 6. 输出格式
-
-最终只输出：
-
-```text
-选择：<技术路线>
-原因：<2~4 个关键原因>
-偏离默认：<如有，说明触发条件；没有则省略>
-```
-
-如果两个方案会造成明显不同的产品结果且需求无法判断，再让用户选择；普通技术细节由 Agent 直接决定。
+只有两个方案会造成明显不同的产品结果、且需求无法判断时，才让用户选择；普通技术细节由 Agent 直接决定。
 
 ---
 
