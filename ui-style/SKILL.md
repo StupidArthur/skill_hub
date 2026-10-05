@@ -197,6 +197,14 @@ Row 用于同类对象或属性的重复记录，例如 Table、List、Property 
 - 动效短促自然，只服务状态变化和空间变化；
 - 危险操作必须与普通操作有明确区分，但不要用夸张视觉制造压力。
 
+## 案例
+
+参考 [`examples/studio-workspace.html`](examples/studio-workspace.html)。
+
+该原型用于展示本 Skill 的**结构和交互语法**，包括统一 Sidebar 导航、Rail 收起、唯一 Toolbar 页面标题、Card / Section / Row、按需 Inspector 和 Auxiliary Panel。
+
+它是设计案例，不是必须逐像素复刻的模板：具体业务内容、控件组合、信息密度和布局比例仍应根据产品场景调整。
+
 ## 默认避免
 
 除非产品定位明确需要，否则不要默认使用：
